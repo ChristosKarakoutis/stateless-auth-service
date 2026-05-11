@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: authentication-system
+
+# Custom Security Properties
+security:
+  jwt:
+    private-key: ${JWT_PRIVATE_KEY:classpath:keys/private.pem}
+    public-key: ${JWT_PUBLIC_KEY:classpath:keys/public.pem}
+    # 15 minutes in milliseconds
+    access-token-expiration: 900000
+    # 7 days in milliseconds
+    refresh-token-expiration: 604800000
