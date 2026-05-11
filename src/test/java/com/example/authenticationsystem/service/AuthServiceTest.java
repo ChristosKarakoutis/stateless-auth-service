@@ -20,11 +20,9 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,7 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class UserServiceTest {
+class AuthServiceTest {
 
     @Mock
     private UserRepository userRepository;
@@ -51,7 +49,7 @@ class UserServiceTest {
     private RefreshTokenService refreshTokenService;
 
     @InjectMocks
-    private UserService userService;
+    private AuthService authService;
 
     private User testUser;
 
@@ -80,7 +78,7 @@ class UserServiceTest {
             return u;
         });
 
-        RegisterResponse response = userService.registerUser(request);
+        RegisterResponse response = authService.registerUser(request);
 
         assertThat(response.getId()).isEqualTo("new-id");
         assertThat(response.getUsername()).isEqualTo("test@test.com");
@@ -93,7 +91,7 @@ class UserServiceTest {
         var request = new RegisterRequest("testuser", "test@test.com", "password123");
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
 
-        assertThatThrownBy(() -> userService.registerUser(request))
+        assertThatThrownBy(() -> authService.registerUser(request))
                 .isInstanceOf(UserAlreadyExistsException.class)
                 .hasMessageContaining("Username");
     }
@@ -105,7 +103,7 @@ class UserServiceTest {
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.empty());
         when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(testUser));
 
-        assertThatThrownBy(() -> userService.registerUser(request))
+        assertThatThrownBy(() -> authService.registerUser(request))
                 .isInstanceOf(UserAlreadyExistsException.class)
                 .hasMessageContaining("Email");
     }
@@ -126,7 +124,7 @@ class UserServiceTest {
                 .build();
         when(refreshTokenService.createRefreshToken(testUser)).thenReturn(refreshToken);
 
-        var response = userService.login(request);
+        var response = authService.login(request);
 
         assertThat(response.getId()).isEqualTo("user-1");
         assertThat(response.getAccessToken()).isEqualTo("access-token");
@@ -141,7 +139,7 @@ class UserServiceTest {
         doThrow(new BadCredentialsException("Bad credentials"))
                 .when(authenticationManager).authenticate(any());
 
-        assertThatThrownBy(() -> userService.login(request))
+        assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(BadCredentialsException.class);
     }
 
@@ -154,7 +152,7 @@ class UserServiceTest {
         when(auth.getDetails()).thenReturn("user-1");
         SecurityContextHolder.getContext().setAuthentication(auth);
 
-        userService.logout();
+        authService.logout();
 
         verify(refreshTokenService).deleteByUserId("user-1");
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
@@ -183,7 +181,7 @@ class UserServiceTest {
         when(jwtService.generateAccessToken(any(), any())).thenReturn("new-access");
         when(refreshTokenService.createRefreshToken(testUser)).thenReturn(newRefreshToken);
 
-        var response = userService.refreshToken("old-refresh");
+        var response = authService.refreshToken("old-refresh");
 
         assertThat(response.getAccessToken()).isEqualTo("new-access");
         assertThat(response.getRefreshToken()).isEqualTo("new-refresh");
@@ -195,7 +193,7 @@ class UserServiceTest {
     void refreshToken_throwsWhenTokenNotFound() {
         when(refreshTokenService.findByToken("invalid")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> userService.refreshToken("invalid"))
+        assertThatThrownBy(() -> authService.refreshToken("invalid"))
                 .isInstanceOf(TokenRefreshException.class)
                 .hasMessageContaining("not in database");
     }

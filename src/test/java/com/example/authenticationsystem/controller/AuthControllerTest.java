@@ -4,7 +4,7 @@ import com.example.authenticationsystem.dto.LoginRequest;
 import com.example.authenticationsystem.dto.LoginResponse;
 import com.example.authenticationsystem.dto.RegisterRequest;
 import com.example.authenticationsystem.dto.RegisterResponse;
-import com.example.authenticationsystem.service.UserService;
+import com.example.authenticationsystem.service.AuthService;
 import com.example.authenticationsystem.util.CookieUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
@@ -25,16 +25,16 @@ class AuthControllerTest {
 
     private MockMvc mockMvc;
 
-    private UserService userService;
+    private AuthService authService;
     private CookieUtil cookieUtil;
     private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
-        userService = mock(UserService.class);
+        authService = mock(AuthService.class);
         cookieUtil = mock(CookieUtil.class);
         objectMapper = new ObjectMapper();
-        var controller = new AuthController(userService, cookieUtil);
+        var controller = new AuthController(authService, cookieUtil);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -46,7 +46,7 @@ class AuthControllerTest {
         var request = new RegisterRequest("user", "user@test.com", "password123");
         var response = new RegisterResponse("id-1", "user", "user@test.com");
 
-        when(userService.registerUser(request)).thenReturn(response);
+        when(authService.registerUser(request)).thenReturn(response);
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(APPLICATION_JSON)
@@ -75,7 +75,7 @@ class AuthControllerTest {
         var refreshCookie = ResponseCookie.from("jwt_refresh_token", "refresh-token")
                 .httpOnly(true).secure(true).path("/api/auth/refresh").maxAge(604800).sameSite("Strict").build();
 
-        when(userService.login(request)).thenReturn(loginResponse);
+        when(authService.login(request)).thenReturn(loginResponse);
         when(cookieUtil.createAccessTokenCookie("access-token", 900)).thenReturn(accessCookie);
         when(cookieUtil.createRefreshTokenCookie("refresh-token", 604800)).thenReturn(refreshCookie);
 
@@ -107,7 +107,7 @@ class AuthControllerTest {
         var refreshCookie = ResponseCookie.from("jwt_refresh_token", "new-refresh")
                 .httpOnly(true).secure(true).path("/api/auth/refresh").maxAge(604800).sameSite("Strict").build();
 
-        when(userService.refreshToken("valid-refresh-token")).thenReturn(loginResponse);
+        when(authService.refreshToken("valid-refresh-token")).thenReturn(loginResponse);
         when(cookieUtil.createAccessTokenCookie("new-access", 900)).thenReturn(accessCookie);
         when(cookieUtil.createRefreshTokenCookie("new-refresh", 604800)).thenReturn(refreshCookie);
 

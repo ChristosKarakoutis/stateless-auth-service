@@ -1,7 +1,7 @@
 package com.example.authenticationsystem.controller;
 
 import com.example.authenticationsystem.dto.*;
-import com.example.authenticationsystem.service.UserService;
+import com.example.authenticationsystem.service.AuthService;
 import com.example.authenticationsystem.util.CookieUtil;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.*;
@@ -12,22 +12,22 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
-    private final UserService userService;
+    private final AuthService authService;
     private final CookieUtil cookieUtil;
 
-    public AuthController(UserService userService, CookieUtil cookieUtil) {
-        this.userService = userService;
+    public AuthController(AuthService authService, CookieUtil cookieUtil) {
+        this.authService = authService;
         this.cookieUtil = cookieUtil;
     }
 
     @PostMapping("/register")
     public ResponseEntity<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(userService.registerUser(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerUser(request));
     }
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        LoginResponse res = userService.login(request);
+        LoginResponse res = authService.login(request);
 
         String accessToken = res.getAccessToken();
         String refreshToken = res.getRefreshToken();
@@ -43,7 +43,7 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout() {
-        userService.logout();
+        authService.logout();
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookieUtil.deleteAccessTokenCookie().toString())
                 .header(HttpHeaders.SET_COOKIE, cookieUtil.deleteRefreshTokenCookie().toString())
@@ -55,7 +55,7 @@ public class AuthController {
         if (refreshToken == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        LoginResponse res = userService.refreshToken(refreshToken);
+        LoginResponse res = authService.refreshToken(refreshToken);
 
         String accessToken = res.getAccessToken();
         String refreshTokenValue = res.getRefreshToken();
