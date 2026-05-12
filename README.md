@@ -1,6 +1,6 @@
 # JWT Authentication System
 
-A stateless, cookie-based authentication microservice built with Spring Boot. Designed as a standalone auth service for a microservice architecture — other services validate JWTs without database calls.
+A stateless, cookie-based authentication microservice built with Spring Boot. Designed as a standalone auth service for a microservice architecture .Other services validate JWTs without database calls.
 
 ## Architecture
 
@@ -13,32 +13,32 @@ A stateless, cookie-based authentication microservice built with Spring Boot. De
       https://localhost                port 443             port 8080              5432
 ```
 
-Nginx terminates TLS using mkcert certificates and forwards plain HTTP to the auth service over the internal Docker network. The auth service never handles TLS directly — clean separation of concerns.
+Nginx terminates TLS using mkcert certificates and forwards plain HTTP to the auth service over the internal Docker network. The auth service never handles TLS directly.
 
 ### Why cookies instead of localStorage
 
-Tokens are stored in **HTTP-only, SameSite=Strict, secure cookies**. This prevents XSS-based token theft — JavaScript has no access to the cookie. The refresh token is scoped to `/api/auth/refresh` only, so it's never sent to other endpoints.
+Tokens are stored in **HTTP-only, SameSite=Strict, secure cookies**. This prevents XSS-based token theft .JavaScript has no access to the cookie. The refresh token is scoped to `/api/auth/refresh` only, so it's never sent to other endpoints.
 
 ### Why stateless
 
 Every authenticated request validates the JWT **cryptographically** using the RSA public key. Zero database queries on the hot path. This means:
 - The auth service and any downstream service can validate tokens **without calling a database**
-- Horizontal scaling is trivial — no shared session store needed
+- Horizontal scaling is trivial
 - Each request is independently verifiable
 
 ### Architecture decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| **JWT access tokens** (15min) | Self-contained, no DB lookup for validation |
-| **UUID refresh tokens** (7 days) | Revocable — stored in DB so we can invalidate on logout |
-| **Refresh token rotation** | Each refresh issues a new token and deletes the old one. If a token is stolen and used, the original owner's next refresh will fail (the stolen token was already consumed) |
-| **No Authorization header** | Tokens live only in cookies. The filter never falls back to `Bearer` headers — keeps the auth surface narrow |
+| Decision | Rationale                                                                                                                                                                              |
+|----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **JWT access tokens** (15min) | Self-contained, no DB lookup for validation                                                                                                                                            |
+| **UUID refresh tokens** (7 days) | Revocable. Stored in DB so we can invalidate on logout                                                                                                                                 |
+| **Refresh token rotation** | Each refresh issues a new token and deletes the old one. If a token is stolen and used, the original owner's next refresh will fail (the stolen token was already consumed)            |
+| **No Authorization header** | Tokens live only in cookies. The filter never falls back to `Bearer` headers                                                                                                           |
 | **Self-validating filter** | The `JwtAuthenticationFilter` parses the JWT and extracts claims (`user_id`, `email`) without touching the DB. The SecurityContext principal is a lightweight object, not a JPA entity |
-| **BCrypt strength 12** | Slower hashing for better brute-force resistance |
-| **RS256 (RSA) signing** | Asymmetric keys — other microservices validate tokens with the public key without sharing secrets. Private key never leaves this service |
-| **Nginx reverse proxy** | Terminates TLS, separates concerns. The auth service doesn't need to know about certificates |
-| **PostgreSQL** | Production-grade persistence for refresh tokens and user data |
+| **BCrypt strength 12** | Slower hashing for better brute-force resistance                                                                                                                                       |
+| **RS256 (RSA) signing** | Asymmetric keys. Other microservices validate tokens with the public key without sharing secrets. Private key never leaves this service                                                |
+| **Nginx reverse proxy** | Terminates TLS, separates concerns. The auth service doesn't need to know about certificates                                                                                           |
+| **PostgreSQL** | Production-grade persistence for refresh tokens and user data                                                                                                                          |
 
 ### Stateless vs stateful endpoints
 
@@ -49,6 +49,118 @@ Every authenticated request validates the JWT **cryptographically** using the RS
 | `POST /refresh` | Yes | Must look up refresh token in DB (revocable by design) |
 | `POST /logout` | Yes | Must delete refresh tokens from DB |
 | All other authenticated requests | **No** | JWT is self-validating — zero DB queries |
+
+
+## Flow diagrams
+
+### 1. Registration
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant N as Nginx (:443)
+    participant A as AuthService
+    participant D as PostgreSQL
+
+    C->>N: POST /register {username, email, password}
+    N->>A: proxy_pass
+    A->>D: check username/email unique
+    A->>D: INSERT user
+    A->>C: 201 {id, username, email}
+```
+
+### 2. Login (cookie handshake)
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant N as Nginx
+    participant A as AuthService
+    participant J as JwtService (RS256)
+    participant D as PostgreSQL
+
+    C->>N: POST /login {email, password}
+    N->>A: proxy_pass
+    A->>D: verify credentials
+    A->>J: generateAccessToken(user_id, email)
+    J->>A: RS256 JWT
+    A->>D: INSERT refresh_token (UUID)
+    D->>A: stored
+    Note over A: build LoginResponse with tokens
+    A->>N: Set-Cookie: jwt_access_token (HttpOnly, Secure)
+    A->>N: Set-Cookie: jwt_refresh_token (path=/refresh)
+    A->>N: body: {id, email} (tokens nulled)
+    N->>C: cookies + JSON body
+```
+
+### 3. Authenticated request (stateless)
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant N as Nginx
+    participant F as JwtAuthFilter
+    participant J as JwtService
+    participant A as AuthService
+
+    C->>N: GET /api/resource (cookie: jwt_access_token)
+    N->>F: extract cookie
+    F->>J: extractUserId(token)
+    F->>J: extractUsername(token)
+    F->>J: isTokenExpired(token)
+    J->>F: claims (no DB)
+    Note over F: set SecurityContext<br/>(user_id in details, email in principal)
+    F->>A: forward request
+    A->>C: 200 response
+```
+
+### 4. Refresh (rotation)
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant N as Nginx
+    participant A as AuthService
+    participant R as RefreshTokenService
+    participant J as JwtService
+    participant D as PostgreSQL
+
+    C->>N: POST /refresh (cookie: jwt_refresh_token)
+    N->>A: extract cookie
+    A->>R: findByToken(token)
+    R->>D: SELECT
+    D->>R: RefreshToken entity
+    R->>R: verifyExpiration()
+    R->>A: valid token
+    A->>R: deleteByToken(old) + createRefreshToken(user)
+    R->>D: DELETE old, INSERT new
+    A->>J: generateAccessToken(user_id, email)
+    J->>A: new RS256 JWT
+    A->>N: Set-Cookie: new access + refresh tokens
+    A->>N: body: {id, email}
+    N->>C: cookies + body
+```
+
+### 5. Logout
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant N as Nginx
+    participant F as JwtAuthFilter
+    participant A as AuthService
+    participant D as PostgreSQL
+
+    C->>N: POST /logout (cookie: jwt_access_token)
+    N->>F: extract cookie
+    F->>F: set SecurityContext (stateless, no DB)
+    F->>A: forward
+    A->>A: auth.getDetails() = user_id
+    A->>D: DELETE FROM refresh_tokens WHERE user.id = user_id
+    A->>N: Set-Cookie: maxAge=0 (clear both cookies)
+    N->>C: 200 OK
+```
+
 
 ## Tech Stack
 
