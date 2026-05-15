@@ -2,6 +2,12 @@ spring:
   application:
     name: authentication-system
 
+springdoc:
+  api-docs:
+    path: /api/auth/v3/api-docs
+  swagger-ui:
+    path: /api/auth/swagger-ui/index.html
+
 # Custom Security Properties
 security:
   jwt:
