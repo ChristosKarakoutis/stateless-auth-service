@@ -1,5 +1,6 @@
 package com.christoskarakoutis.authenticationsystem.jwt;
 
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -43,23 +44,29 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        String userEmail = jwtService.extractUsername(token);
+        try {
+            String userEmail = jwtService.extractUsername(token);
 
-        if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null
-                && !jwtService.isTokenExpired(token)) {
+            if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null
+                    && !jwtService.isTokenExpired(token)) {
 
-            String userId = jwtService.extractUserId(token);
+                String userId = jwtService.extractUserId(token);
 
-            // Principal is Spring Security's lightweight User, NOT the JPA entity.
-            // Do NOT cast auth.getPrincipal() to com.christoskarakoutis.authenticationsystem.entity.User.
-            // Use auth.getName() for email and auth.getDetails() (cast to String) for user_id.
-            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                    new User(userEmail, "", List.of()), null, List.of()
-            );
-            authToken.setDetails(userId);
+                // Principal is Spring Security's lightweight User, NOT the JPA entity.
+                // Do NOT cast auth.getPrincipal() to com.christoskarakoutis.authenticationsystem.entity.User.
+                // Use auth.getName() for email and auth.getDetails() (cast to String) for user_id.
+                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                        new User(userEmail, "", List.of()), null, List.of()
+                );
+                authToken.setDetails(userId);
 
-            SecurityContextHolder.getContext().setAuthentication(authToken);
+                SecurityContextHolder.getContext().setAuthentication(authToken);
+            }
+        } catch (JwtException e) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired token");
+            return;
         }
+
         filterChain.doFilter(request, response);
     }
 }
