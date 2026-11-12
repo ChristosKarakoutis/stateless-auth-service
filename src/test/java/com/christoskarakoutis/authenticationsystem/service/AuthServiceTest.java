@@ -81,7 +81,7 @@ class AuthServiceTest {
         RegisterResponse response = authService.registerUser(request);
 
         assertThat(response.getId()).isEqualTo("new-id");
-        assertThat(response.getUsername()).isEqualTo("test@test.com");
+        assertThat(response.getUsername()).isEqualTo("testuser");
         assertThat(response.getEmail()).isEqualTo("test@test.com");
     }
 
@@ -176,7 +176,7 @@ class AuthServiceTest {
                 .expiryDate(Instant.now().plusSeconds(3600))
                 .build();
 
-        when(refreshTokenService.findByToken("old-refresh")).thenReturn(Optional.of(storedToken));
+        when(refreshTokenService.findByTokenForUpdate("old-refresh")).thenReturn(Optional.of(storedToken));
         when(refreshTokenService.verifyExpiration(storedToken)).thenReturn(storedToken);
         when(jwtService.generateAccessToken(any(), any())).thenReturn("new-access");
         when(refreshTokenService.createRefreshToken(testUser)).thenReturn(newRefreshToken);
@@ -191,7 +191,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("refresh throws when token is not in database")
     void refreshToken_throwsWhenTokenNotFound() {
-        when(refreshTokenService.findByToken("invalid")).thenReturn(Optional.empty());
+        when(refreshTokenService.findByTokenForUpdate("invalid")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.refreshToken("invalid"))
                 .isInstanceOf(TokenRefreshException.class)

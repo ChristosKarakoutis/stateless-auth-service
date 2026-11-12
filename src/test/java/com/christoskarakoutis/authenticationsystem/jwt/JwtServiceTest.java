@@ -1,17 +1,17 @@
 package com.christoskarakoutis.authenticationsystem.jwt;
 
+import com.christoskarakoutis.authenticationsystem.config.JwtProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.security.core.userdetails.User;
-import org.springframework.test.util.ReflectionTestUtils;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -33,12 +33,15 @@ class JwtServiceTest {
         Files.writeString(privateKeyPath, pemEncode(keyPair.getPrivate().getEncoded(), "PRIVATE KEY"));
         Files.writeString(publicKeyPath, pemEncode(keyPair.getPublic().getEncoded(), "PUBLIC KEY"));
 
-        jwtService = new JwtService();
-        ReflectionTestUtils.setField(jwtService, "privateKeyResource",
-                new FileSystemResource(privateKeyPath.toFile()));
-        ReflectionTestUtils.setField(jwtService, "publicKeyResource",
-                new FileSystemResource(publicKeyPath.toFile()));
-        ReflectionTestUtils.setField(jwtService, "accessTokenExpiration", 900000L);
+        JwtProperties properties = new JwtProperties(
+                new FileSystemResource(privateKeyPath.toFile()),
+                new FileSystemResource(publicKeyPath.toFile()),
+                Duration.ofMinutes(15),
+                Duration.ofDays(7)
+        );
+
+        jwtService = new JwtService(properties);
+        jwtService.loadKeys();
     }
 
     @Test

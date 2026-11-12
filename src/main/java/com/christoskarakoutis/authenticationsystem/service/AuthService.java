@@ -6,12 +6,15 @@ import com.christoskarakoutis.authenticationsystem.dto.RegisterRequest;
 import com.christoskarakoutis.authenticationsystem.dto.RegisterResponse;
 import com.christoskarakoutis.authenticationsystem.entity.RefreshToken;
 import com.christoskarakoutis.authenticationsystem.entity.User;
+import com.christoskarakoutis.authenticationsystem.exception.InvalidPasswordException;
 import com.christoskarakoutis.authenticationsystem.exception.TokenRefreshException;
 import com.christoskarakoutis.authenticationsystem.exception.UserAlreadyExistsException;
 import com.christoskarakoutis.authenticationsystem.jwt.JwtService;
 import com.christoskarakoutis.authenticationsystem.repository.UserRepository;
+import com.christoskarakoutis.authenticationsystem.security.SecurityUser;
 import lombok.RequiredArgsConstructor;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -27,6 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 public class AuthService {
 
+    private static final int BCRYPT_MAX_PASSWORD_BYTES = 72;
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -40,6 +45,7 @@ public class AuthService {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new UserAlreadyExistsException("Email is already in use.");
         }
+        validatePasswordBytes(request.getPassword());
         String passwordHash = passwordEncoder.encode(request.getPassword());
         User user = User.builder()
                 .username(request.getUsername())
@@ -55,6 +61,12 @@ public class AuthService {
         );
     }
 
+    private void validatePasswordBytes(String rawPassword) {
+        if (rawPassword.getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_PASSWORD_BYTES) {
+            throw new InvalidPasswordException("Password must be at most 72 bytes when UTF-8 encoded.");
+        }
+    }
+
     public LoginResponse login(LoginRequest request) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -66,7 +78,10 @@ public class AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new UsernameNotFoundException("User not found."));
 
-        String accessToken = jwtService.generateAccessToken(Map.of("user_id", user.getId()), user);
+        String accessToken = jwtService.generateAccessToken(
+                Map.of("user_id", user.getId()),
+                SecurityUser.from(user)
+        );
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
 
         return LoginResponse.builder()
@@ -89,13 +104,16 @@ public class AuthService {
 
     @Transactional
     public LoginResponse refreshToken(String token) {
-        RefreshToken storedToken = refreshTokenService.findByToken(token)
+        RefreshToken storedToken = refreshTokenService.findByTokenForUpdate(token)
                 .orElseThrow(() -> new TokenRefreshException("Refresh token is not in database!"));
 
         RefreshToken verifiedToken = refreshTokenService.verifyExpiration(storedToken);
         User user = verifiedToken.getUser();
 
-        String accessToken = jwtService.generateAccessToken(Map.of("user_id", user.getId()), user);
+        String accessToken = jwtService.generateAccessToken(
+                Map.of("user_id", user.getId()),
+                SecurityUser.from(user)
+        );
         refreshTokenService.deleteByToken(token);
         RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user);
 

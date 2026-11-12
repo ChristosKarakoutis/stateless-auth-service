@@ -18,6 +18,9 @@ class CookieUtilTest {
         assertThat(cookie.getValue()).isEqualTo("token123");
         assertThat(cookie.getMaxAge().getSeconds()).isEqualTo(900);
         assertThat(cookie.getPath()).isEqualTo("/");
+        assertThat(cookie.isHttpOnly()).isTrue();
+        assertThat(cookie.isSecure()).isTrue();
+        assertThat(cookie.getSameSite()).isEqualTo("Strict");
     }
 
     @Test

@@ -1,17 +1,18 @@
 package com.christoskarakoutis.authenticationsystem.service;
 
+import com.christoskarakoutis.authenticationsystem.config.JwtProperties;
 import com.christoskarakoutis.authenticationsystem.entity.RefreshToken;
 import com.christoskarakoutis.authenticationsystem.entity.User;
 import com.christoskarakoutis.authenticationsystem.exception.TokenExpiredException;
 import com.christoskarakoutis.authenticationsystem.exception.TokenRefreshException;
 import com.christoskarakoutis.authenticationsystem.repository.RefreshTokenRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -26,8 +27,14 @@ class RefreshTokenServiceTest {
     @Mock
     private RefreshTokenRepository refreshTokenRepository;
 
-    @InjectMocks
     private RefreshTokenService refreshTokenService;
+
+    @BeforeEach
+    void setUp() {
+        JwtProperties properties = new JwtProperties(
+                null, null, Duration.ofMinutes(15), Duration.ofDays(7));
+        refreshTokenService = new RefreshTokenService(refreshTokenRepository, properties);
+    }
 
     private User createUser() {
         return User.builder()

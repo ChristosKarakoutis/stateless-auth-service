@@ -1,5 +1,6 @@
 package com.christoskarakoutis.authenticationsystem.controller;
 
+import com.christoskarakoutis.authenticationsystem.config.JwtProperties;
 import com.christoskarakoutis.authenticationsystem.dto.LoginRequest;
 import com.christoskarakoutis.authenticationsystem.dto.LoginResponse;
 import com.christoskarakoutis.authenticationsystem.dto.RegisterRequest;
@@ -15,6 +16,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import java.time.Duration;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -34,7 +37,8 @@ class AuthControllerTest {
         authService = mock(AuthService.class);
         cookieUtil = mock(CookieUtil.class);
         objectMapper = new ObjectMapper();
-        var controller = new AuthController(authService, cookieUtil);
+        var props = new JwtProperties(null, null, Duration.ofMinutes(15), Duration.ofDays(7));
+        var controller = new AuthController(authService, cookieUtil, props);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 

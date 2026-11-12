@@ -2,18 +2,20 @@ spring:
   application:
     name: authentication-system
 
+server:
+  # So springdoc and redirects honour nginx's X-Forwarded-Proto/Host
+  forward-headers-strategy: framework
+
 springdoc:
   api-docs:
-    path: /api/auth/v3/api-docs
+    path: /v3/api-docs
   swagger-ui:
-    path: /api/auth/swagger-ui/index.html
+    path: /swagger-ui.html
 
 # Custom Security Properties
 security:
   jwt:
     private-key: ${JWT_PRIVATE_KEY:classpath:keys/private.pem}
     public-key: ${JWT_PUBLIC_KEY:classpath:keys/public.pem}
-    # 15 minutes in milliseconds
-    access-token-expiration: 900000
-    # 7 days in milliseconds
-    refresh-token-expiration: 604800000
+    access-token-expiration: 15m
+    refresh-token-expiration: 7d

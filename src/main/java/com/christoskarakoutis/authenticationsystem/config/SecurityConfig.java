@@ -20,6 +20,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import com.christoskarakoutis.authenticationsystem.jwt.JwtAuthenticationFilter;
 import com.christoskarakoutis.authenticationsystem.repository.UserRepository;
+import com.christoskarakoutis.authenticationsystem.security.SecurityUser;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.MediaType;
 
 @Configuration
 @EnableWebSecurity
@@ -41,6 +44,7 @@ public class SecurityConfig {
     @Bean
     public UserDetailsService userDetailsService() {
         return username -> userRepository.findByEmail(username)
+                .map(SecurityUser::from)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + username));
     }
 
@@ -61,6 +65,13 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            response.getWriter().write("{\"error\":\"Authentication required\"}");
+                        })
+                )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();

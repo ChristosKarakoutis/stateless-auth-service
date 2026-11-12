@@ -1,8 +1,10 @@
 package com.christoskarakoutis.authenticationsystem.controller;
 
+import com.christoskarakoutis.authenticationsystem.config.JwtProperties;
 import com.christoskarakoutis.authenticationsystem.dto.*;
 import com.christoskarakoutis.authenticationsystem.service.AuthService;
 import com.christoskarakoutis.authenticationsystem.util.CookieUtil;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
@@ -11,14 +13,11 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/auth")
+@RequiredArgsConstructor
 public class AuthController {
     private final AuthService authService;
     private final CookieUtil cookieUtil;
-
-    public AuthController(AuthService authService, CookieUtil cookieUtil) {
-        this.authService = authService;
-        this.cookieUtil = cookieUtil;
-    }
+    private final JwtProperties jwtProperties;
 
     @PostMapping("/register")
     public ResponseEntity<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
@@ -36,8 +35,10 @@ public class AuthController {
         res.setRefreshToken(null);
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, cookieUtil.createAccessTokenCookie(accessToken, 900).toString())
-                .header(HttpHeaders.SET_COOKIE, cookieUtil.createRefreshTokenCookie(refreshToken, 604800).toString())
+                .header(HttpHeaders.SET_COOKIE, cookieUtil.createAccessTokenCookie(
+                        accessToken, jwtProperties.accessTokenExpiration().toSeconds()).toString())
+                .header(HttpHeaders.SET_COOKIE, cookieUtil.createRefreshTokenCookie(
+                        refreshToken, jwtProperties.refreshTokenExpiration().toSeconds()).toString())
                 .body(res);
     }
 
@@ -64,8 +65,10 @@ public class AuthController {
         res.setRefreshToken(null);
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, cookieUtil.createAccessTokenCookie(accessToken, 900).toString())
-                .header(HttpHeaders.SET_COOKIE, cookieUtil.createRefreshTokenCookie(refreshTokenValue, 604800).toString())
+                .header(HttpHeaders.SET_COOKIE, cookieUtil.createAccessTokenCookie(
+                        accessToken, jwtProperties.accessTokenExpiration().toSeconds()).toString())
+                .header(HttpHeaders.SET_COOKIE, cookieUtil.createRefreshTokenCookie(
+                        refreshTokenValue, jwtProperties.refreshTokenExpiration().toSeconds()).toString())
                 .body(res);
     }
 

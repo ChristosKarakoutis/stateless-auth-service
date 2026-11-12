@@ -1,5 +1,6 @@
 package com.christoskarakoutis.authenticationsystem.jwt;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -45,12 +46,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         try {
-            String userEmail = jwtService.extractUsername(token);
+            Claims claims = jwtService.parse(token);
+            String userEmail = claims.getSubject();
+            String userId = claims.get("user_id", String.class);
 
-            if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null
-                    && !jwtService.isTokenExpired(token)) {
-
-                String userId = jwtService.extractUserId(token);
+            if (userEmail != null && userId != null
+                    && SecurityContextHolder.getContext().getAuthentication() == null) {
 
                 // Principal is Spring Security's lightweight User, NOT the JPA entity.
                 // Do NOT cast auth.getPrincipal() to com.christoskarakoutis.authenticationsystem.entity.User.
@@ -62,7 +63,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
-        } catch (JwtException e) {
+        } catch (JwtException | IllegalArgumentException e) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired token");
             return;
         }

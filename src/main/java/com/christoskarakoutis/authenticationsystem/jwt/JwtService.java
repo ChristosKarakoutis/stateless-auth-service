@@ -1,8 +1,10 @@
 package com.christoskarakoutis.authenticationsystem.jwt;
 
+import com.christoskarakoutis.authenticationsystem.config.JwtProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import org.springframework.beans.factory.annotation.Value;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -17,34 +19,41 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
 
 @Service
+@RequiredArgsConstructor
 public class JwtService {
 
-    @Value("${security.jwt.private-key}")
-    private Resource privateKeyResource;
-
-    @Value("${security.jwt.public-key}")
-    private Resource publicKeyResource;
-
-    @Value("${security.jwt.access-token-expiration}")
-    private long accessTokenExpiration;
+    private final JwtProperties properties;
 
     private PrivateKey signingKey;
     private PublicKey verificationKey;
 
+    @PostConstruct
+    void loadKeys() {
+        signingKey = readPrivateKey(loadPem(properties.privateKey()));
+        verificationKey = readPublicKey(loadPem(properties.publicKey()));
+    }
+
+    public Claims parse(String token) {
+        return Jwts.parser()
+                .verifyWith(verificationKey)
+                .clockSkewSeconds(30)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+    }
+
+    public boolean isExpired(Claims claims) {
+        return claims.getExpiration().before(new Date());
+    }
+
     public String extractUsername(String token) {
-        return extractClaim(token, Claims::getSubject);
+        return parse(token).getSubject();
     }
 
     public String extractUserId(String token) {
-        return extractClaim(token, claims -> claims.get("user_id", String.class));
-    }
-
-    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
-        final Claims claims = extractAllClaims(token);
-        return claimsResolver.apply(claims);
+        return parse(token).get("user_id", String.class);
     }
 
     public String generateAccessToken(UserDetails userDetails) {
@@ -52,53 +61,27 @@ public class JwtService {
     }
 
     public String generateAccessToken(Map<String, Object> extraClaims, UserDetails userDetails) {
-        return buildToken(extraClaims, userDetails, accessTokenExpiration);
+        return buildToken(extraClaims, userDetails, properties.accessTokenExpiration().toMillis());
     }
 
     private String buildToken(
             Map<String, Object> extraClaims,
             UserDetails userDetails,
-            long expiration
+            long expirationMs
     ) {
+        long now = System.currentTimeMillis();
         return Jwts
                 .builder()
                 .claims(extraClaims)
                 .subject(userDetails.getUsername())
-                .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + expiration))
-                .signWith(getSigningKey(), Jwts.SIG.RS256)
+                .issuedAt(new Date(now))
+                .expiration(new Date(now + expirationMs))
+                .signWith(signingKey, Jwts.SIG.RS256)
                 .compact();
     }
 
     public boolean isTokenExpired(String token) {
-        return extractExpiration(token).before(new Date());
-    }
-
-    private Date extractExpiration(String token) {
-        return extractClaim(token, Claims::getExpiration);
-    }
-
-    private Claims extractAllClaims(String token) {
-        return Jwts
-                .parser()
-                .verifyWith(getVerificationKey())
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
-    }
-
-    private PrivateKey getSigningKey() {
-        if (signingKey == null) {
-            signingKey = readPrivateKey(loadPem(privateKeyResource));
-        }
-        return signingKey;
-    }
-
-    private PublicKey getVerificationKey() {
-        if (verificationKey == null) {
-            verificationKey = readPublicKey(loadPem(publicKeyResource));
-        }
-        return verificationKey;
+        return isExpired(parse(token));
     }
 
     private String loadPem(Resource resource) {
@@ -137,9 +120,5 @@ public class JwtService {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to parse public key", e);
         }
-    }
-
-    public long getExpirationTime() {
-        return accessTokenExpiration;
     }
 }
